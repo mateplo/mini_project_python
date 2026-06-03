@@ -4,6 +4,7 @@ Run the API first (uvicorn api.main:app --port 8000), then:
     streamlit run dashboard/app.py
 """
 
+import os
 import time
 
 import httpx
@@ -12,8 +13,10 @@ import streamlit as st
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-API_BASE = "http://localhost:8000"
-DEFAULT_KEY = "demo-key"
+API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+API_KEY = os.getenv("API_KEY", "dev-secret")
+HEADERS = {"X-API-Key": API_KEY}
+DEFAULT_KEY = API_KEY
 MAX_POINTS = 60
 
 st.set_page_config(page_title="DevOps Monitor", page_icon="🖥️", layout="wide")
