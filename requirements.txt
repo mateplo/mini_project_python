@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+psutil
+httpx
+pydantic
+streamlit
+pandas
+pytest
+pytest-cov
+websockets
