@@ -84,11 +84,19 @@ jobs:
           az containerapp update \
             --name ${{ env.API_APP }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_APP }}:${{ github.sha }}
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_APP }}:${{ github.sha }} \
+            --set-env-vars API_KEY=${{ secrets.API_KEY }}
+
+      - name: Get API public URL
+        id: apifqdn
+        run: |
+          fqdn=$(az containerapp show --name ${{ env.API_APP }} --resource-group ${{ env.RESOURCE_GROUP }} --query properties.configuration.ingress.fqdn -o tsv)
+          echo "fqdn=$fqdn" >> "$GITHUB_OUTPUT"
 
       - name: Update Dashboard container app
         run: |
           az containerapp update \
             --name ${{ env.DASHBOARD_APP }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
-            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.DASHBOARD_APP }}:${{ github.sha }}
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.DASHBOARD_APP }}:${{ github.sha }} \
+            --set-env-vars API_BASE=https://${{ steps.apifqdn.outputs.fqdn }} API_KEY=${{ secrets.API_KEY }}
