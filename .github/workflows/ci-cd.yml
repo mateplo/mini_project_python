@@ -1,0 +1,94 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write   # required for OIDC login to Azure
+  contents: read
+
+env:
+  RESOURCE_GROUP: devops-monitor-rg
+  API_APP: devops-monitor-api
+  DASHBOARD_APP: devops-monitor-dashboard
+
+jobs:
+  # ── Job 1: lint + tests (runs on every push and PR) ───────────────────────
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint (flake8)
+        run: flake8 api/ dashboard/ tests/
+
+      - name: Test (pytest + coverage)
+        run: pytest tests/ -v --cov=api --cov-fail-under=75
+
+  # ── Job 2: build & push both images to ACR (main only) ────────────────────
+  build:
+    name: Build & Push to ACR
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login
+        run: az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Build & push API image
+        run: |
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_APP }}:${{ github.sha }} -f api/Dockerfile .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_APP }}:${{ github.sha }}
+
+      - name: Build & push Dashboard image
+        run: |
+          docker build -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.DASHBOARD_APP }}:${{ github.sha }} -f dashboard/Dockerfile .
+          docker push ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.DASHBOARD_APP }}:${{ github.sha }}
+
+  # ── Job 3: deploy both Container Apps (main only) ─────────────────────────
+  deploy:
+    name: Deploy to Azure Container Apps
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update API container app
+        run: |
+          az containerapp update \
+            --name ${{ env.API_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.API_APP }}:${{ github.sha }}
+
+      - name: Update Dashboard container app
+        run: |
+          az containerapp update \
+            --name ${{ env.DASHBOARD_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.DASHBOARD_APP }}:${{ github.sha }}
