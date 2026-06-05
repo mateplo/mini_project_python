@@ -101,6 +101,7 @@ with tab_metrics:
 # ─── Tab 2 — Servers ──────────────────────────────────────────────────────────
 
 def _color_status(val: str) -> str:
+    """Background colour for a status cell: green UP, amber DEGRADED, red DOWN."""
     colors = {"UP": "#1b5e20", "DEGRADED": "#b26a00", "DOWN": "#7f1d1d"}
     bg = colors.get(val, "#444444")
     return f"background-color: {bg}; color: white;"
